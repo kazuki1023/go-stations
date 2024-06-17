@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/TechBowl-japan/go-stations/model"
+	"github.com/mattn/go-sqlite3"
 )
 
 // A TODOService implements CRUD of TODO entities.
@@ -21,12 +22,62 @@ func NewTODOService(db *sql.DB) *TODOService {
 
 // CreateTODO creates a TODO on DB.
 func (s *TODOService) CreateTODO(ctx context.Context, subject, description string) (*model.TODO, error) {
+	if subject == "" {
+		return nil, sqlite3.Error{
+			Code:         sqlite3.ErrConstraint,
+			ExtendedCode: sqlite3.ErrConstraintCheck,
+		}
+	}
+	if description == "" {
+		return nil, sqlite3.Error{
+			Code:         sqlite3.ErrConstraint,
+			ExtendedCode: sqlite3.ErrConstraintCheck,
+		}
+	}
+
 	const (
 		insert  = `INSERT INTO todos(subject, description) VALUES(?, ?)`
 		confirm = `SELECT subject, description, created_at, updated_at FROM todos WHERE id = ?`
 	)
 
-	return nil, nil
+	// 挿入クエリの準備
+	stmt, err := s.db.PrepareContext(ctx, insert)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	// 挿入クエリの実行
+	res, err := stmt.ExecContext(ctx, subject, description)
+	if err != nil {
+		return nil, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	// 確認クエリの準備
+	stmtConfirm, err := s.db.PrepareContext(ctx, confirm)
+	if err != nil {
+		return nil, err
+	}
+	defer stmtConfirm.Close()
+
+	// 確認クエリの実行
+	row := stmtConfirm.QueryRowContext(ctx, id)
+
+	var todo model.TODO
+	err = row.Scan(&todo.ID, &todo.Subject, &todo.Description, &todo.CreatedAt, &todo.UpdatedAt)
+	if err != nil {
+		return nil, sqlite3.Error{
+			Code:         sqlite3.ErrConstraint,
+			ExtendedCode: sqlite3.ErrConstraintCheck,
+		}
+	}
+
+	return &todo, nil
 }
 
 // ReadTODO reads TODOs on DB.
