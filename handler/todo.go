@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/TechBowl-japan/go-stations/model"
@@ -34,12 +35,14 @@ func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *TODOHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	var req model.CreateTODORequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, "bad request: failed to decode request body", http.StatusBadRequest)
+		fmt.Printf("Error decoding request body: %v\n", err)
 		return
 	}
 
 	if req.Subject == "" {
-		http.Error(w, "subject cannot be empty", http.StatusBadRequest)
+		http.Error(w, "bad request: subject cannot be empty", http.StatusBadRequest)
+		fmt.Println("Subject cannot be empty")
 		return
 	}
 
@@ -47,6 +50,7 @@ func (h *TODOHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	todo, err := h.svc.CreateTODO(ctx, req.Subject, req.Description)
 	if err != nil {
 		http.Error(w, "internal server error: "+err.Error(), http.StatusInternalServerError)
+		fmt.Printf("Error creating TODO: %v\n", err)
 		return
 	}
 
@@ -55,7 +59,8 @@ func (h *TODOHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(res); err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		http.Error(w, "internal server error: failed to encode response", http.StatusInternalServerError)
+		fmt.Printf("Error encoding response: %v\n", err)
 		return
 	}
 }
