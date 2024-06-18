@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/TechBowl-japan/go-stations/model"
 	"github.com/mattn/go-sqlite3"
@@ -28,12 +29,6 @@ func (s *TODOService) CreateTODO(ctx context.Context, subject, description strin
 			ExtendedCode: sqlite3.ErrConstraintCheck,
 		}
 	}
-	if description == "" {
-		return nil, sqlite3.Error{
-			Code:         sqlite3.ErrConstraint,
-			ExtendedCode: sqlite3.ErrConstraintCheck,
-		}
-	}
 
 	const (
 		insert  = `INSERT INTO todos(subject, description) VALUES(?, ?)`
@@ -43,6 +38,7 @@ func (s *TODOService) CreateTODO(ctx context.Context, subject, description strin
 	// 挿入クエリの準備
 	stmt, err := s.db.PrepareContext(ctx, insert)
 	if err != nil {
+		fmt.Printf("Error preparing insert statement: %v\n", err)
 		return nil, err
 	}
 	defer stmt.Close()
@@ -50,6 +46,7 @@ func (s *TODOService) CreateTODO(ctx context.Context, subject, description strin
 	// 挿入クエリの実行
 	res, err := stmt.ExecContext(ctx, subject, description)
 	if err != nil {
+		fmt.Printf("Error executing insert statement: %v\n", err)
 		return nil, err
 	}
 
