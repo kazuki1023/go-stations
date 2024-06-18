@@ -89,12 +89,59 @@ func (s *TODOService) ReadTODO(ctx context.Context, prevID, size int64) ([]*mode
 
 // UpdateTODO updates the TODO on DB.
 func (s *TODOService) UpdateTODO(ctx context.Context, id int64, subject, description string) (*model.TODO, error) {
+	if id == 0 {
+		return nil, model.NewErrNotFound()
+	}
+	if subject == "" {
+		return nil, sqlite3.Error{
+			Code:         sqlite3.ErrConstraint,
+			ExtendedCode: sqlite3.ErrConstraintCheck,
+		}
+	}
 	const (
 		update  = `UPDATE todos SET subject = ?, description = ? WHERE id = ?`
-		confirm = `SELECT subject, description, created_at, updated_at FROM todos WHERE id = ?`
+		confirm = `SELECT id, subject, description, created_at, updated_at FROM todos WHERE id = ?`
 	)
 
-	return nil, nil
+	// 更新クエリの準備
+	stmt, err := s.db.PrepareContext(ctx, update)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	// 更新クエリの実行
+	res, err := stmt.ExecContext(ctx, subject, description, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// 変更された行の数を確認
+	rowAffected, err := res.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if rowAffected == 0 {
+		fmt.Printf("No rows affected\n")
+		return nil, model.NewErrNotFound()
+	}
+
+	// 更新されたレコードの確認
+	stmtConfirm, err := s.db.PrepareContext(ctx, confirm)
+	if err != nil {
+		return nil, err
+	}
+	defer stmtConfirm.Close()
+
+	row := stmtConfirm.QueryRowContext(ctx, id)
+
+	var todo model.TODO
+	err = row.Scan(&todo.ID, &todo.Subject, &todo.Description, &todo.CreatedAt, &todo.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan todo: %w", err)
+	}
+
+	return &todo, nil
 }
 
 // DeleteTODO deletes TODOs on DB by ids.
