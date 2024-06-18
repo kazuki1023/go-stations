@@ -26,6 +26,8 @@ func NewTODOHandler(svc *service.TODOService) *TODOHandler {
 func (h *TODOHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		h.handlePost(w, r)
+	} else if r.Method == http.MethodPut {
+		h.handlePut(w, r)
 	} else {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -55,6 +57,51 @@ func (h *TODOHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := &model.CreateTODOResponse{
+		TODO: *todo,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		http.Error(w, "internal server error: failed to encode response", http.StatusInternalServerError)
+		fmt.Printf("Error encoding response: %v\n", err)
+		return
+	}
+}
+
+// handlePut handles PUT requests to update an existing TODO.
+func (h *TODOHandler) handlePut(w http.ResponseWriter, r *http.Request) {
+	var req model.UpdateTODORequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request: failed to decode request body", http.StatusBadRequest)
+		fmt.Printf("Error decoding request body: %v\n", err)
+		return
+	}
+
+	if req.ID == 0 {
+		http.Error(w, "bad request: ID cannot be zero", http.StatusBadRequest)
+		fmt.Println("ID cannot be zero")
+		return
+	}
+
+	if req.Subject == "" {
+		http.Error(w, "bad request: subject cannot be empty", http.StatusBadRequest)
+		fmt.Println("Subject cannot be empty")
+		return
+	}
+
+	ctx := r.Context()
+	todo, err := h.svc.UpdateTODO(ctx, req.ID, req.Subject, req.Description)
+	if err != nil {
+		if err == model.NewErrNotFound() {
+			http.Error(w, "not found: TODO not found", http.StatusNotFound)
+			fmt.Println("TODO not found")
+			return
+		}
+		http.Error(w, "internal server error: "+err.Error(), http.StatusInternalServerError)
+		fmt.Printf("Error updating TODO: %v\n", err)
+		return
+	}
+
+	res := &model.UpdateTODOResponse{
 		TODO: *todo,
 	}
 	w.Header().Set("Content-Type", "application/json")
